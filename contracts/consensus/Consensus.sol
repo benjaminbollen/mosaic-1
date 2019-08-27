@@ -17,11 +17,12 @@ pragma solidity >=0.5.0 <0.6.0;
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 
 import "../committee/Committee.sol";
+import "../core/Core.sol";
 import "../reputation/ReputationI.sol";
 import "../EIP20I.sol";
 
-import "./AnchorI.sol";
-import "./Block.sol";
+import "../anchor/AnchorI.sol";
+import "../block/Block.sol";
 
 contract Consensus {
 
@@ -246,7 +247,7 @@ contract Consensus {
 
     function commit(
         bytes20 _chainId,
-        bytes calldata _rlpBlockHeader,
+        bytes calldata _blockHeaderRlp,
         bytes32 _kernelHash,
         bytes32 _originObservation,
         uint256 _dynasty,
@@ -259,7 +260,12 @@ contract Consensus {
     )
         external
     {
-        bytes32 blockHash = keccak256(_rlpBlockHeader);
+        require(
+            _chainId != bytes20(0),
+            "ChainId cannot be zero."
+        );
+
+        bytes32 blockHash = keccak256(_blockHeaderRlp);
         require(
             blockHash == _source,
             "Block header does not match with vote message source."
@@ -295,24 +301,22 @@ contract Consensus {
         );
 
         require(
-            committee.committeeDecision != bytes32(0),
+            committee.committeeDecision() != bytes32(0),
             "Committee has not decide on the proposal."
         );
 
         require(
-            _committeeLock == keccak256(committee.committeeDecision),
+            _committeeLock == keccak256(
+                abi.encode(
+                    committee.committeeDecision()
+                )
+            ),
             "Committee decision does not match with committee lock."
         );
 
-        address anchorAddress = anchors[chainId];
-        require(
-            anchorAddress != 0,
-            "There is no anchor for the specified chain id."
-        );
+        Block.Header memory blockHeader = Block.decodeHeader(_blockHeaderRlp);
 
-        Block.Header memory blockHeader = Block.decodeHeader(rlpBlockHeader);
-
-        AnchorI(anchorAddress).anchorStateRoot(
+        AnchorI(address(_chainId)).anchorStateRoot(
             blockHeader.height,
             blockHeader.stateRoot
         );
