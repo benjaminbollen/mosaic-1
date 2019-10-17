@@ -20,8 +20,9 @@ import "./CoreI.sol";
 import "../consensus/ConsensusModule.sol";
 import "../reputation/ReputationI.sol";
 import "../version/MosaicVersion.sol";
+import "../validator-set/ValidatorSet.sol";
 
-contract Core is ConsensusModule, MosaicVersion, CoreI {
+contract Core is ConsensusModule, MosaicVersion, ValidatorSet, CoreI {
 
     using SafeMath for uint256;
 
@@ -99,15 +100,15 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
 
     /** EIP-712 domain separator for Core */
     bytes32 public constant DOMAIN_SEPARATOR_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,bytes20 chainId,address verifyingContract)"
+        "EIP712Domain(string name,string version,bytes20 chainId,address core)"
     );
 
     /** EIP-712 type hash for Kernel. */
     bytes32 public constant KERNEL_TYPEHASH = keccak256(
-        "Kernel(uint256 height,bytes32 parent,address[] updatedValidators,uint256[] updatedReputation,uint256 gasTarget,uint256 gasPrice)"
+        "Kernel(uint256 height,bytes32 parent,address[] updatedValidators,uint256[] updatedReputation,uint256 gasTarget)"
     );
 
-    /** EIP-712 type hash for a Transition. */
+    /** EIP-712 type hash for a Transition */
     bytes32 public constant TRANSITION_TYPEHASH = keccak256(
         "Transition(bytes32 kernelHash,bytes32 originObservation,uint256 dynasty,uint256 accumulatedGas,bytes32 committeeLock)"
     );
@@ -117,14 +118,8 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
         "VoteMessage(bytes32 transitionHash,bytes32 source,bytes32 target,uint256 sourceBlockHeight,uint256 targetBlockHeight)"
     );
 
-    /** Sentinel pointer for marking end of linked-list of validators */
-    address public constant SENTINEL_VALIDATORS = address(0x1);
-
     /** Sentinel pointer for marking end of linked-list of proposals */
     bytes32 public constant SENTINEL_PROPOSALS = bytes32(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
-
-    /** Maximum future end height, set for all active validators */
-    uint256 public constant MAX_FUTURE_END_HEIGHT = uint256(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
 
     /** Maximum validators that can join or logout in one metablock */
     uint256 public constant MAX_DELTA_VALIDATORS = uint256(10);
@@ -153,39 +148,8 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
     /** Epoch length */
     uint256 public epochLength;
 
-    /** Validator begin height assigned to this core
-     * zero - not registered to this core, or started at height 0
-     * bigger than zero - begin height for active validators (given endHeight >= metablock height)
-     */
-    mapping(address => uint256) public validatorBeginHeight;
-
-    /** Validator end height assigned to this core
-     * zero - not registered to this core
-     * MAX_FUTURE_END_HEIGHT - for active validators (assert beginHeight <= metablock height)
-     * less than MAX_FUTURE_END_HEIGHT - for logged out validators
-     */
-    mapping(address => uint256) public validatorEndHeight;
-
     /** mapping of metablock height to Kernels */
     mapping(uint256 => Kernel) public kernels;
-
-    /** Validator count in core */
-    uint256 public countValidators;
-
-    /** Validator minimum count required set by consensus */
-    uint256 public minimumValidatorCount;
-
-    /** Join limit for validators */
-    uint256 public joinLimit;
-
-    /** Quorum needed for valid proposal */
-    uint256 public quorum;
-
-    /** Count of join messages */
-    uint256 public countJoinMessages;
-
-    /** Count of log out messages */
-    uint256 public countLogOutMessages;
 
     /** Reputation contract */
     ReputationI public reputation;
@@ -210,12 +174,6 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
 
     /** Committed sourceBlockHeight */
     uint256 public committedSourceBlockHeight;
-
-    // /** Closed transition object */
-    // Transition public closedTransition;
-
-    // /** Sealing vote message */
-    // VoteMessage public sealedVoteMessage;
 
     /** Map kernel height to linked list of proposals */
     mapping(uint256 => mapping(bytes32 => bytes32)) proposals;
@@ -273,7 +231,7 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
 
     /* External and public functions */
 
-    constructor(
+    constructor (
         bytes20 _chainId,
         uint256 _epochLength,
         uint256 _minValidators,
@@ -288,6 +246,7 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
         uint256 _sourceBlockHeight
     )
         ConsensusModule(msg.sender) // Core is constructed by Consenus
+        ValidatorSet(_minValidators, _joinLimit)
         public
     {
         // note: consider adding requirement checks
@@ -306,9 +265,6 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
         epochLength = _epochLength;
 
         reputation = _reputation;
-
-        minimumValidatorCount = _minValidators;
-        joinLimit = _joinLimit;
 
         creationKernelHeight = _height;
 
@@ -615,6 +571,8 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
             "Validator minimum limit reached.");
         require(countLogOutMessages < MAX_DELTA_VALIDATORS,
             "Maximum number of validators that can log out in one metablock is reached.");
+        require(validatorBeginHeight[_validator] <= openKernelHeight,
+            "Validator must have begun.");
         uint256 nextKernelHeight = openKernelHeight.add(1);
         // removeValidator performs necessary requirements
         // remove validator from next metablock height
@@ -736,41 +694,6 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
         }
         delete proposals[_height][deleteProposal];
         delete voteCounts[deleteProposal];
-    }
-
-    /**
-     * insert validator in the core
-     * sets begin height and end height of validator
-     */
-    function insertValidator(address _validator, uint256 _beginHeight)
-        internal
-    {
-        require(_validator != address(0),
-            "Validator must not be null address.");
-        require(_beginHeight >= openKernelHeight,
-            "Begin height cannot be less than kernel height.");
-        require(validatorEndHeight[_validator] == 0,
-            "Validator must not already be part of this core.");
-        require(validatorBeginHeight[_validator] == 0,
-            "Validator must not have a non-zero begin height");
-        validatorBeginHeight[_validator] = _beginHeight;
-        validatorEndHeight[_validator] = MAX_FUTURE_END_HEIGHT;
-        // update validator count upon new metablock opening
-    }
-
-    function removeValidator(address _validator, uint256 _endHeight)
-        internal
-    {
-        require(_validator != address(0),
-            "Validator must not be null address.");
-        require(_endHeight > openKernelHeight,
-            "End height cannot be less or equal than kernel height.");
-        require(validatorBeginHeight[_validator] <= openKernelHeight,
-            "Validator must have begun.");
-        require(validatorEndHeight[_validator] == MAX_FUTURE_END_HEIGHT,
-            "Validator must be active.");
-        validatorEndHeight[_validator] = _endHeight;
-        // update validator count upon new metablock opening
     }
 
     /**
@@ -898,5 +821,4 @@ contract Core is ConsensusModule, MosaicVersion, CoreI {
             )
         );
     }
-
 }

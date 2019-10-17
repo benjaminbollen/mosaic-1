@@ -28,17 +28,18 @@ contract ProtoCore is MosaicVersion
 
     /* Constants */
 
+    // TASK: define shared constants in inherited contract
     /** Maximum future end height of a validator. */
     uint256 public constant VALIDATOR_MAX_FUTURE_END_HEIGHT = uint256(
         0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
     );
 
-    /** EIP-712 domain separator name for ProtoCore. */
-    string public constant DOMAIN_SEPARATOR_NAME = "Mosaic-ProtoCore";
+    /** EIP-712 domain separator name for ProtoCore is the domain separator of Core. */
+    string public constant DOMAIN_SEPARATOR_NAME = "Mosaic-Core";
 
     /** EIP-712 domain separator typehash for ProtoCore. */
     bytes32 public constant DOMAIN_SEPARATOR_TYPEHASH = keccak256(
-        "EIP712Domain(string name,string version,bytes20 originCoreIdentifier,bytes20 auxiliaryCoreIdentifier,address verifyingContract)"
+        "EIP712Domain(string name,string version,bytes20 chainId,address core)"
     );
 
     /** EIP-712 typehash for kernel. */
@@ -46,19 +47,19 @@ contract ProtoCore is MosaicVersion
         "Kernel(uint256 height,bytes32 parent,address[] updatedValidators,uint256[] updatedReputation,uint256 gasTarget)"
     );
 
-    /** EIP-712 typehash for an origin vote message. */
-    bytes32 public constant ORIGIN_VOTE_MESSAGE_TYPEHASH = keccak256(
-        "OriginVoteMessage(bytes20 coreIdentifier,bytes32 sourceBlockHash,bytes32 targetBlockHash,uint256 sourceBlockHeight,uint256 targetBlockHeight)"
+    /** EIP-712 typehash for a Transition. */
+    bytes32 public constant TRANSITION_TYPEHASH = keccak256(
+        "Transition(bytes32 kernelHash,bytes32 originObservation,uint256 dynasty,uint256 accumulatedGas, bytes32 committeeLock)"
     );
 
-    /** EIP-712 typehash for an auxiliary vote message. */
-    bytes32 public constant AUXILIARY_VOTE_MESSAGE_TYPEHASH = keccak256(
-        "AuxiliaryVoteMessage(bytes20 coreIdentifier,bytes32 transitionHash,bytes32 sourceBlockHash,bytes32 targetBlockHash,uint256 sourceBlockHeight,uint256 targetBlockHeight)"
+    /** EIP-712 typehash for an origin observation. */
+    bytes32 public constant ORIGIN_OBSERVATION_TYPEHASH = keccak256(
+        "OriginObservation(bytes32 source,bytes32 target,uint256 sourceBlockHeight,uint256 targetBlockHeight)"
     );
 
-    /** EIP-712 typehash for an auxiliary transition. */
-    bytes32 public constant AUXILIARY_TRANSITION_TYPEHASH = keccak256(
-        "AuxiliaryTransition(bytes20 coreIdentifier,bytes32 kernelHash,bytes32 latestOriginObservation,uint256 auxiliaryDynasty,uint256 accumulatedGas, bytes32 accumulatedTransactionRoot)"
+    /** EIP-712 typehash for a vote message. */
+    bytes32 public constant VOTE_MESSAGE_TYPEHASH = keccak256(
+        "VoteMessage(bytes32 transitionHash,bytes32 source,bytes32 target,uint256 sourceBlockHeight,uint256 targetBlockHeight)"
     );
 
 
@@ -104,7 +105,7 @@ contract ProtoCore is MosaicVersion
         /**
          * Dynasty of a checkpoint 'c' is the number of finalised checkpoints
          * in a chain from the genesis checkpoint to the parent of
-         * the checkpoin 'c'.
+         * the checkpoint 'c'.
          *
          * Dynasty is currently used only for the auxiliary chain's blocks.
          */
@@ -140,7 +141,7 @@ contract ProtoCore is MosaicVersion
         uint256 accumulatedGas;
 
         // The accumulated transaction root while calculating an auxiliary
-        // transition object. For the genesias checkpoint, the accumulated
+        // transition object. For the genesis checkpoint, the accumulated
         // transaction root is defined as the transaction root of the block.
         // For all subsequent blocks, the accumulated transaction root AR[i] at
         // block height i is AR[i] = keccak256(AR[i−1] , R[i]), where R[i] is
@@ -239,7 +240,9 @@ contract ProtoCore is MosaicVersion
 
     /* Special Member Functions */
 
-    constructor()
+    constructor(
+      bytes20 _chainId // continue
+    )
         public
     {
         domainSeparator = keccak256(
@@ -247,7 +250,7 @@ contract ProtoCore is MosaicVersion
                 DOMAIN_SEPARATOR_TYPEHASH,
                 DOMAIN_SEPARATOR_NAME,
                 DOMAIN_SEPARATOR_VERSION,
-                originCoreIdentifier,
+                originCoreIdentifier, //update
                 auxiliaryCoreIdentifier,
                 address(this)
             )
