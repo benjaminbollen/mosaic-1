@@ -27,3 +27,12 @@ build/
 *.synctex.gz
 *.synctex.gz(busy)
 *.pdfsync
+
+# temp
+temp/
+
+# interacts
+interacts
+
+# contract builds
+contract_build

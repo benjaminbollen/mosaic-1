@@ -246,7 +246,7 @@ contract Core is ConsensusModule, MosaicVersion, ValidatorSet, CoreI {
         uint256 _sourceBlockHeight
     )
         ConsensusModule(msg.sender) // Core is constructed by Consenus
-        ValidatorSet(_minValidators, _joinLimit)
+        ValidatorSet()
         public
     {
         // note: consider adding requirement checks
@@ -265,6 +265,9 @@ contract Core is ConsensusModule, MosaicVersion, ValidatorSet, CoreI {
         epochLength = _epochLength;
 
         reputation = _reputation;
+
+        minimumValidatorCount = _minValidators;
+        joinLimit = _joinLimit;
 
         creationKernelHeight = _height;
 

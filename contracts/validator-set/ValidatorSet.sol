@@ -36,7 +36,7 @@ contract ValidatorSet {
     /* Structs */
 
     /** Validator begin height assigned to this set
-     * zero - not registered to this set, or started at height 0
+     * zero - not registered to this set, or started at height 0 if endHeight > 0
      * bigger than zero - begin height for active validators (given endHeight >= metablock height)
      */
     mapping(address => uint256) public validatorBeginHeight;
@@ -76,13 +76,13 @@ contract ValidatorSet {
     /* Special functions */
 
     constructor (
-        uint256 _minValidators,
-        uint256 _joinLimit
+        // uint256 _minValidators,
+        // uint256 _joinLimit
     )
         public
     {
-        minimumValidatorCount = _minValidators;
-        joinLimit = _joinLimit;
+        // minimumValidatorCount = _minValidators;
+        // joinLimit = _joinLimit;
     }
 
 
