@@ -12,7 +12,7 @@ contract ProxyFactory {
     /// @param masterCopy Address of master copy.
     /// @param data Payload for message call sent to new proxy contract.
     function createProxy(address masterCopy, bytes memory data)
-        public
+        internal
         returns (Proxy proxy)
     {
         proxy = new Proxy(masterCopy);

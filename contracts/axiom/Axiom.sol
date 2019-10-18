@@ -1,12 +1,26 @@
 pragma solidity >=0.5.0 <0.6.0;
 
+// Copyright 2019 OpenST Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import "../proxies/Proxy.sol";
 import "../proxies/ProxyFactory.sol";
 import "../consensus/ConsensusI.sol";
 import "../anchor/Anchor.sol"; // TODO: change this to factory, when new anchor is implemented.
 import "./AxiomI.sol";
 
-contract Axiom is AxiomI {
+contract Axiom is AxiomI, ProxyFactory {
 
     /* Constants */
 
@@ -66,13 +80,10 @@ contract Axiom is AxiomI {
     address public reputationMasterCopy;
 
     /** Consensus contract address */
-    address public consensus;
+    ConsensusI public consensus;
 
     /** Reputation contract address */
-    address public reputation;
-
-    /** ProxyFactory contract address */
-    ProxyFactory public proxyFactory;
+    ReputationI public reputation;
 
 
     /* Special Member Functions */
@@ -125,8 +136,6 @@ contract Axiom is AxiomI {
         coreMasterCopy = _coreMasterCopy;
         committeeMasterCopy = _committeeMasterCopy;
         reputationMasterCopy = _reputationMasterCopy;
-
-        proxyFactory = new ProxyFactory();
     }
 
 
@@ -175,7 +184,7 @@ contract Axiom is AxiomI {
         );
 
         // Deploy the consensus proxy contract.
-        Proxy consensusProxy = new Proxy(consensusMasterCopy);
+        Proxy consensusProxy = createProxy(consensusMasterCopy, "");
 
         consensus = address(consensusProxy);
 
@@ -192,7 +201,7 @@ contract Axiom is AxiomI {
         );
 
         reputation = address(
-            proxyFactory.createProxy(
+            createProxy(
                 reputationMasterCopy,
                 reputationSetupData
             )
@@ -251,6 +260,20 @@ contract Axiom is AxiomI {
         );
     }
 
+    function newCore(
+        bytes calldata _data
+    )
+        external
+        onlyConsensus
+        returns (address core_)
+    {
+        return deployProxyContract(coreMasterCopy, _data);
+    }
+
+    // TODO: consider if this is a sensible suggestion; apply decision / revert
+
+    /* Private Functions */
+
     /**
      * @notice Deploy proxy contract. This can be called only by consensus
      *         contract.
@@ -260,10 +283,9 @@ contract Axiom is AxiomI {
      */
     function deployProxyContract(
         address _masterCopy,
-        bytes calldata _data
+        bytes memory _data
     )
-        external
-        onlyConsensus
+        private
         returns (address deployedAddress_)
     {
         require(
@@ -271,15 +293,12 @@ contract Axiom is AxiomI {
             'Master copy address is 0.'
         );
 
-        Proxy proxyContract = proxyFactory.createProxy(
+        Proxy proxyContract = createProxy(
             _masterCopy,
             _data
         );
         deployedAddress_ = address(proxyContract);
     }
-
-
-    /* Private Functions */
 
     function callProxyData(
         Proxy _proxy,

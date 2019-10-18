@@ -83,8 +83,8 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
     /** Gas target delta to open new metablock */
     uint256 public gasTargetDelta;
 
-    /** Coinbase split percentage */
-    uint256 public coinbaseSplitPercentage;
+    /** Coinbase split permille */
+    uint256 public coinbaseSplitPermille;
 
     /** Block hash of heads of Metablockchains */
     mapping(bytes20 /* chainId */ => bytes32 /* MetablockHash */) public metablockHeaderTips;
@@ -113,11 +113,11 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
     /** Axiom contract address */
     AxiomI public axiom;
 
-    /** Core master copy contract address */
-    address public coreMasterCopy;
+    // /** Core master copy contract address */
+    // address public coreMasterCopy;
 
-    /** Committee master copy contract address */
-    address public committeeMasterCopy;
+    // /** Committee master copy contract address */
+    // address public committeeMasterCopy;
 
     /* Modifiers */
 
@@ -175,6 +175,7 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
         external
     {
         // This function must be called only once.
+        // suggestion; check Axiom address == 0
         require(
             committeeSize == 0 && address(reputation) == address(0),
             "Consensus is already setup."
@@ -187,12 +188,12 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
 
         // TODO: Check what should be the minimum number of validators.
         require(
-            _minValidators > 2,
+            _minValidators > 4,
             "Min validator size must be greater than 2."
         );
 
         require(
-            _joinLimit > _minValidators,
+            _joinLimit >= _minValidators,
             "Join limit is less than minimum validator count."
         );
 
@@ -202,8 +203,8 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
         );
 
         require(
-            _coinbaseSplitPercentage <= 1000,
-            "Coin base split percentage is not in valid range: [0, 1000]."
+            _coinbaseSplitPermille <= uint256(1000),
+            "Coin base split permille is not in valid range: [0, 1000]."
         );
 
         require(
@@ -344,33 +345,36 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
     )
         external
     {
+
+        // step 1. assert against consensus storage
+
+        CoreI core = assignments[_chaindId];
+
+        // use internal-only verifyCommitteeLock
+
+        // (bytes32 proposal, address core) = verifyCommitteeLock(
+        //     _chainId,
+        //     _kernelHash,
+        //     _originObservation,
+        //     _dynasty,
+        //     _accumulatedGas,
+        //     _committeeLock,
+        //     _source,
+        //     _target,
+        //     _sourceBlockHeight,
+        //     _targetBlockHeight
+        // );
+
+        Precommit storage precommit = precommits[core];
+        bytes32 proposal = precommit.proposal;
+        // Delete the precommit.
+        delete precommits[core];
+
         bytes32 blockHash = keccak256(_rlpBlockHeader);
         require(
             blockHash == _source,
             "Block header does not match with vote message source."
         );
-
-        (bytes32 proposal, address core) = verifyCommitteeLock(
-            _chainId,
-            _kernelHash,
-            _originObservation,
-            _dynasty,
-            _accumulatedGas,
-            _committeeLock,
-            _source,
-            _target,
-            _sourceBlockHeight,
-            _targetBlockHeight
-        );
-
-        Precommit storage precommit = precommits[core];
-        require(
-            proposal == precommit.proposal,
-            'There is no precommit for the specified core.'
-        );
-
-        // Delete the precommit.
-        delete precommits[core];
 
         address anchorAddress = anchors[_chainId];
         require(
@@ -387,7 +391,7 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
         );
 
         // Open a new metablock.
-        CoreI(core).openMetablock(
+        byte32 precommit = CoreI(core).openMetablock(
             _originObservation,
             _dynasty,
             _accumulatedGas,
@@ -398,6 +402,11 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
             _targetBlockHeight,
             gasTargetDelta
         );
+
+        // require(
+        //     proposal == precommit,
+        //     'There is no precommit for the specified core.'
+        // );
     }
 
     /**
@@ -594,16 +603,7 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
     }
 
     function verifyCommitteeLock(
-        bytes20 _chainId,
-        bytes32 _kernelHash,
-        bytes32 _originObservation,
-        uint256 _dynasty,
-        uint256 _accumulatedGas,
-        bytes32 _committeeLock,
-        bytes32 _source,
-        bytes32 _target,
-        uint256 _sourceBlockHeight,
-        uint256 _targetBlockHeight
+        bytes20 _chainId
     )
         private
         view
@@ -616,18 +616,6 @@ contract Consensus is MasterCopyNonUpgradable, CoreStatusEnum, ConsensusI {
         require(
             isCore(coreAddress_),
             "There is no core for the specified chain id."
-        );
-
-        proposal_ = CoreI(coreAddress_).assertPrecommit(
-            _kernelHash,
-            _originObservation,
-            _dynasty,
-            _accumulatedGas,
-            _committeeLock,
-            _source,
-            _target,
-            _sourceBlockHeight,
-            _targetBlockHeight
         );
 
         CommitteeI committee = proposals[proposal_];
