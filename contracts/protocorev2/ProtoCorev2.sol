@@ -63,13 +63,13 @@ contract ProtoCorev2 is MosaicVersion, ValidatorSet {
 
     /* Structs */
 
-    /** Vote structure */
-    struct VoteMessage {
-        /** Reference to justified parent source checkpoint */
-        bytes32 parentVoteMessage;
+    /** Link structure */
+    struct Link {
+        /** Reference to justified parent vote message to read source checkpoint */
+        bytes32 parentVoteMessageHash;
 
-        /** Kernel hash at source checkpoint */
-        bytes32 sourceKernelHash;
+        // /** Kernel hash at source checkpoint */
+        // bytes32 sourceKernelHash;
 
         /** Block hash of target checkpoint */
         bytes32 targetBlockHash;
@@ -114,7 +114,7 @@ contract ProtoCorev2 is MosaicVersion, ValidatorSet {
     bytes32 public metachainId;
 
     /** Mapping to store vote messages */
-    mapping (bytes32 /* VoteMessageHash */ => VoteMessage) voteMessages;
+    mapping (bytes32 /* VoteMessage */ => Link) links;
 
 
     /* Special functions */
@@ -139,7 +139,7 @@ contract ProtoCorev2 is MosaicVersion, ValidatorSet {
                 DOMAIN_SEPARATOR_TYPEHASH,
                 DOMAIN_SEPARATOR_NAME,
                 DOMAIN_SEPARATOR_VERSION,
-                _chainId,
+                _metachainId,
                 _core
             )
         );
@@ -152,28 +152,8 @@ contract ProtoCorev2 is MosaicVersion, ValidatorSet {
 
     /* External functions */
 
-    // // register the transition object of a checkpoint
-    // // the source checkpoint must be justfied
-    // function registerTransition(
-    //     bytes32 _sourceVoteMessage,
-    //     bytes32 _sourceKernelHash,
-    //     bytes32 _sourceOriginObservation,
-    //     uint256 _sourceDynasty,
-    //     uint256 _sourceAccumulatedGas,
-    //     bytes32 _sourceCommitteeLock
-    // )
-    //     external
-    // {
-    //     require(_sourceVoteMessage != bytes32(0),
-    //         "Source reference cannot be null.");
-
-    //     (bytes32 sourceBlockHash,
-    //         uint256 sourceBlockHeight) = assertJustified(_sourceVoteMessage);
-
-    // }
-
-    function registerVoteMessage(
-        bytes32 _sourceVoteMessage,
+    function proposeLink(
+        bytes32 _sourceVoteMessage, // ? rename
         bytes32 _targetBlockHash,
         uint256 _targetBlockHeight,
         bytes32 _sourceKernelHash,
@@ -205,7 +185,7 @@ contract ProtoCorev2 is MosaicVersion, ValidatorSet {
                 "Vote messages for finalisation must be included before child checkpoint.");
         }
 
-        bytes32 transitionHash = hashTransition(
+        bytes32 sourceTransitionHash = hashTransition(
             _sourceKernelHash,
             _sourceOriginObservation,
             _sourceDynasty,
@@ -213,34 +193,62 @@ contract ProtoCorev2 is MosaicVersion, ValidatorSet {
             _sourceCommitteeLock
         );
 
-        bytes32 voteMessage = hashVoteMessage(
-            transitionHash,
+        bytes32 voteMessageHash = hashVoteMessage(
+            sourceTransitionHash,
             sourceBlockHash,
             _targetBlockHash,
             sourceBlockHeight,
             _targetBlockHeight
         );
 
+        // TODO: store proposed link under voteMessageHash
+        // links[voteMessageHash] = Link{}
+        // store as registered
 
     }
+
+    function registerVote(
+        bytes32 _voteMessageHash,
+        bytes32 _r,
+        bytes32 _s,
+        uint8 _v
+    )
+        external
+    {
+        // inclusion principle for finalisation vote messages
+        // if (linkLength == epochLength) {
+        //     require(block.number < _targetBlockHeight.add(epochLength),
+        //         "Vote messages for finalisation must be included before child checkpoint.");
+        // }
+        // TODO: count forward and rear validator votes
+        // inForwardValidatorSet(_validator) -> add vote
+        // inRearValidatorSet(_validator) -> add vote
+
+        // if quorum reached for both forward and rear validator set
+        // then targetFinalisation is justified
+        // if linkLength == epoch; then mark parentLink as finalised
+
+        // call coconsensus.finaliseCheckpoint
+    }
+
 
 
     /* Public view functions */
 
-    function assertJustified(bytes32 _voteMessage)
+    function assertJustified(bytes32 _voteMessageHash)
         public
         view
         returns (
             bytes32 sourceBlockHash_,
             uint256 sourceBlockHeight_)
     {
-        VoteMessage storage sourceVM = voteMessages[_voteMessage];
+        Link storage sourceLink = links[_voteMessage];
 
-        require(sourceVM.finalisationStatus >= FinalisationStatus.justified,
+        require(sourceLink.finalisationStatus >= FinalisationStatus.justified,
             "Source checkpoint must be justified or higher.");
 
-        sourceBlockHash_ = sourceVM.targetBlockHash;
-        sourceBlockHeight_ = sourceVM.targetBlockHeight;
+        sourceBlockHash_ = sourceLink.targetBlockHash;
+        sourceBlockHeight_ = sourceLink.targetBlockHeight;
     }
 
     /* Internal functions */

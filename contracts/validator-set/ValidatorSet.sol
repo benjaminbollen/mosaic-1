@@ -129,7 +129,8 @@ contract ValidatorSet {
         returns (bool)
     {
         return validatorBeginHeight[_validator] <= _height &&
-            validatorEndHeight[_validator] >= _height;
+            validatorEndHeight[_validator] >= _height &&
+            validatorEndHeight[_validator] > 0;
     }
 
     /** */
@@ -139,7 +140,8 @@ contract ValidatorSet {
         returns (bool)
     {
         return validatorBeginHeight[_validator] <= _height &&
-            validatorEndHeight[_validator] > _height;
+            validatorEndHeight[_validator] > _height &&
+            validatorEndHeight[_validator] > 0;
     }
 
     /** */
@@ -149,6 +151,7 @@ contract ValidatorSet {
         returns (bool)
     {
         return validatorBeginHeight[_validator] < _height &&
-            validatorEndHeight[_validator] >= _height;
+            validatorEndHeight[_validator] >= _height &&
+            validatorEndHeight[_validator] > 0;
     }
 }
